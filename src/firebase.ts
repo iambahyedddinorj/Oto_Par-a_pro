@@ -4,12 +4,13 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: "AIzaSyAPuNKIyVKwGHWaPwYlb1Lu9irdBLcdkic",
+  authDomain: "oto-parca-pro.firebaseapp.com",
+  projectId: "oto-parca-pro",
+  storageBucket: "oto-parca-pro.firebasestorage.app",
+  messagingSenderId: "41893729916",
+  appId: "1:41893729916:web:6b024efb76efe481031bf9",
+  measurementId: "G-WDYM78DQ2D"
 };
 
 const app = initializeApp(firebaseConfig);
