@@ -27,6 +27,10 @@
         background: #64748b; 
       }
     </style>
+    <!-- Polyfill for process.env to prevent "process is not defined" white screen error in browser -->
+    <script>
+      window.process = window.process || { env: { NODE_ENV: 'production' } };
+    </script>
   <script type="importmap">
 {
   "imports": {
