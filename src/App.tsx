@@ -6,52 +6,50 @@ import { Register } from './components/Register';
 import { Dashboard } from './components/Dashboard';
 import { AdminPanel } from './components/AdminPanel';
 import { UserProfile } from './components/UserProfile';
-import { auth, db } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { auth, getUserData, createMissingUserDoc, logoutUser, updateUserData } from './services/firebaseService';
+import { onAuthStateChanged } from 'firebase/auth';
 
-type ViewState = 'login' | 'register' | 'dashboard' | 'admin' | 'profile';
+type ViewState = 'login' | 'register' | 'dashboard' | 'admin' | 'profile' | 'pending';
+
+// SENİN ÖZEL ID'N (Otomatik Admin olması için)
+const MY_SUPER_ADMIN_ID = "ByNthR6Fp4YBiBqtB3Di4jZuqnp2";
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('login');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // User is signed in, fetch details from Firestore
-        try {
-          const docRef = doc(db, "users", firebaseUser.uid);
-          const docSnap = await getDoc(docRef);
-          
-          if (docSnap.exists()) {
-            const userData = docSnap.data() as User;
-            // Ensure ID is set from Firestore
-            const fullUser: User = { ...userData, id: firebaseUser.uid };
-            
-            if (!fullUser.isApproved && fullUser.role !== 'admin') {
-              setLoginError('Hesabınız henüz Admin tarafından onaylanmadı.');
-              await signOut(auth);
-              setCurrentUser(null);
-              setView('login');
-            } else {
-              setCurrentUser(fullUser);
-              setView('dashboard');
-              setLoginError(null);
+        // Kullanıcı giriş yaptı, verilerini Firestore'dan çek
+        let userData = await getUserData(firebaseUser.uid);
+
+        // Eğer veritabanında dosya yoksa OTOMATİK OLUŞTUR (Self-Healing)
+        if (!userData) {
+          console.log("Kullanıcı verisi eksik, otomatik oluşturuluyor...");
+          userData = await createMissingUserDoc(firebaseUser.uid, firebaseUser.email);
+        }
+
+        // ÖZEL KONTROL: Eğer giriş yapan sensen, otomatik ADMIN yap
+        if (firebaseUser.uid === MY_SUPER_ADMIN_ID) {
+            if (userData.role !== 'admin' || !userData.isApproved) {
+                await updateUserData(firebaseUser.uid, { role: 'admin', isApproved: true });
+                userData.role = 'admin';
+                userData.isApproved = true;
             }
-          } else {
-            console.error("No such user document!");
-            setLoginError("Kullanıcı verisi bulunamadı.");
-            await signOut(auth);
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          setLoginError("Veri bağlantı hatası.");
+        }
+
+        setCurrentUser(userData);
+
+        // Yönlendirme mantığı
+        if (!userData.isApproved) {
+            setView('pending'); // Onay bekliyor ekranı
+        } else {
+            setView('dashboard');
         }
       } else {
-        // User is signed out
+        // Çıkış yapıldı
         setCurrentUser(null);
         setView('login');
       }
@@ -61,28 +59,47 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const handleUpdateUser = (updatedUser: User) => {
-    // If updating self in Admin/Profile panels, update local state immediately for UX
-    if (currentUser && currentUser.id === updatedUser.id) {
-      setCurrentUser(updatedUser);
-    }
-  };
-
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setView('login');
-    } catch (error) {
-      console.error("Logout failed", error);
-    }
+    await logoutUser();
+    setView('login');
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white">
-        <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-      </div>
+        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
     );
+  }
+
+  // ONAY BEKLEME EKRANI
+  if (view === 'pending' && currentUser) {
+      return (
+        <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center p-4 text-center">
+            <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 max-w-md w-full shadow-2xl">
+                <div className="w-20 h-20 bg-yellow-500/20 text-yellow-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <h1 className="text-2xl font-bold text-white mb-2">Hesap Onayı Bekleniyor</h1>
+                <p className="text-slate-400 mb-6">Hesabınız oluşturuldu ancak güvenlik nedeniyle yönetici onayı gerekmektedir.</p>
+                
+                <div className="bg-black/30 p-4 rounded-lg mb-6 text-left">
+                    <p className="text-xs text-slate-500 mb-1 uppercase font-bold">Kullanıcı ID (UID)</p>
+                    <code className="text-sm font-mono text-green-400 break-all select-all">{currentUser.id}</code>
+                    <p className="text-[10px] text-slate-600 mt-2">Bu ID'yi sistem yöneticisine ileterek onayı hızlandırabilirsiniz.</p>
+                </div>
+
+                <div className="flex gap-3">
+                    <button onClick={() => window.location.reload()} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold transition-colors">
+                        Kontrol Et ve Yenile
+                    </button>
+                    <button onClick={handleLogout} className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl font-bold transition-colors">
+                        Çıkış
+                    </button>
+                </div>
+            </div>
+        </div>
+      );
   }
 
   return (
@@ -97,7 +114,6 @@ const App: React.FC = () => {
         {view === 'login' && (
           <Login 
             onNavigateToRegister={() => setView('register')}
-            error={loginError}
           />
         )}
         
@@ -120,7 +136,6 @@ const App: React.FC = () => {
 
             {view === 'admin' && currentUser.role === 'admin' && (
               <AdminPanel 
-                onUpdateUser={handleUpdateUser}
                 onBack={() => setView('dashboard')}
               />
             )}
@@ -128,52 +143,12 @@ const App: React.FC = () => {
             {view === 'profile' && (
               <UserProfile 
                 user={currentUser} 
-                onUpdateUser={handleUpdateUser}
                 onBack={() => setView('dashboard')}
               />
             )}
           </>
         )}
       </div>
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeInDown {
-          from { opacity: 0; transform: translateY(-20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeInRight {
-          from { opacity: 0; transform: translateX(20px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(15px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes zoomIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.4s ease-out forwards;
-        }
-        .animate-fadeInDown {
-          animation: fadeInDown 0.6s ease-out forwards;
-        }
-        .animate-fadeInRight {
-          animation: fadeInRight 0.4s ease-out forwards;
-        }
-        .animate-fadeInUp {
-          animation: fadeInUp 0.5s ease-out forwards;
-          opacity: 0; /* Important for stagger delay */
-        }
-        .animate-zoomIn {
-          animation: zoomIn 0.3s ease-out forwards;
-        }
-      `}</style>
     </div>
   );
 };

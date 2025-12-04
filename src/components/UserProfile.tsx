@@ -1,41 +1,26 @@
+
 import React, { useState } from 'react';
 import { User } from '../types';
-import { db } from '../firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { updateUserData } from '../services/firebaseService';
 
 interface UserProfileProps {
   user: User;
-  onUpdateUser: (updatedUser: User) => void;
   onBack: () => void;
 }
 
-export const UserProfile: React.FC<UserProfileProps> = ({ user, onUpdateUser, onBack }) => {
+export const UserProfile: React.FC<UserProfileProps> = ({ user, onBack }) => {
   const [formData, setFormData] = useState<User>(user);
   const [success, setSuccess] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    try {
-        const userRef = doc(db, "users", user.id);
-        const { id, ...dataToUpdate } = formData;
-        
-        await updateDoc(userRef, {
-            name: dataToUpdate.name,
-            username: dataToUpdate.username
-            // Email and password changes require Auth API, skipping for simplicity in this view
-        });
-
-        onUpdateUser(formData);
-        setSuccess(true);
-        setTimeout(() => setSuccess(false), 3000);
-    } catch (error) {
-        console.error("Profile update failed:", error);
-        alert("Profil güncellenirken hata oluştu.");
-    } finally {
-        setLoading(false);
-    }
+    await updateUserData(user.id, {
+        name: formData.name,
+        username: formData.username,
+        email: formData.email
+    });
+    setSuccess(true);
+    setTimeout(() => setSuccess(false), 3000);
   };
 
   return (
@@ -94,19 +79,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, onUpdateUser, on
             <input
               type="email"
               value={formData.email}
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-blue-500 transition-colors"
               disabled
-              className="w-full px-4 py-3 bg-slate-900/30 border border-slate-700 rounded-xl text-slate-500 cursor-not-allowed"
             />
-             <p className="text-xs text-slate-500 mt-1">E-posta adresi değiştirilemez.</p>
+            <p className="text-xs text-slate-600 mt-1">E-posta adresi buradan değiştirilemez.</p>
           </div>
 
           <div className="pt-4 border-t border-slate-700/50 flex justify-end">
             <button
               type="submit"
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-lg hover:shadow-blue-600/20 disabled:opacity-50"
+              className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-lg hover:shadow-blue-600/20"
             >
-              {loading ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
+              Değişiklikleri Kaydet
             </button>
           </div>
         </form>

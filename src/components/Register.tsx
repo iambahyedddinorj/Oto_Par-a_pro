@@ -1,7 +1,6 @@
+
 import React, { useState } from 'react';
-import { auth, db } from '../firebase';
-import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { registerUser } from '../services/firebaseService';
 
 interface RegisterProps {
   onNavigateToLogin: () => void;
@@ -14,9 +13,9 @@ export const Register: React.FC<RegisterProps> = ({ onNavigateToLogin }) => {
     email: '',
     password: ''
   });
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -27,38 +26,26 @@ export const Register: React.FC<RegisterProps> = ({ onNavigateToLogin }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+    setLoading(true);
 
     try {
-      // 1. Create Auth User
-      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-      
-      // 2. Create Firestore Document
-      await setDoc(doc(db, "users", userCredential.user.uid), {
+      await registerUser(formData.email, formData.password, {
         name: formData.name,
-        username: formData.username,
-        email: formData.email,
-        role: 'user',
-        isApproved: false, // Default pending
-        allowedBrands: []
+        username: formData.username
       });
-
-      // 3. Sign out immediately because we want them to login only after approval (or show wait screen)
-      await signOut(auth);
-
       setSuccess(true);
-      setFormData({ name: '', username: '', email: '', password: '' });
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/email-already-in-use') {
-        setError('Bu e-posta adresi zaten kullanımda.');
+      if (err.message.includes("permission-denied") || err.code === "permission-denied") {
+          setError("Kayıt olunamadı: Veritabanı izni yok. Firebase Konsol -> Firestore Database -> Rules kısmını 'allow read, write: if true;' yapınız.");
+      } else if (err.code === 'auth/email-already-in-use') {
+          setError('Bu e-posta adresi zaten kullanımda.');
       } else if (err.code === 'auth/weak-password') {
-        setError('Şifre en az 6 karakter olmalıdır.');
+          setError('Şifre en az 6 karakter olmalıdır.');
       } else {
-        setError('Kayıt başarısız: ' + err.message);
+          setError('Kayıt olurken hata: ' + err.message);
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -96,11 +83,11 @@ export const Register: React.FC<RegisterProps> = ({ onNavigateToLogin }) => {
           <h1 className="text-3xl font-bold text-white mb-2">Kayıt Ol</h1>
           <p className="text-slate-400">Yeni bir hesap oluşturun</p>
         </div>
-        
+
         {error && (
-          <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-3 rounded-lg mb-6 text-sm text-center">
-            {error}
-          </div>
+            <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-3 rounded-lg mb-6 text-sm text-center break-words">
+                {error}
+            </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -159,9 +146,9 @@ export const Register: React.FC<RegisterProps> = ({ onNavigateToLogin }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all transform hover:scale-[1.02] shadow-lg mt-4 disabled:opacity-50 flex justify-center items-center"
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all transform hover:scale-[1.02] shadow-lg mt-4 disabled:opacity-50"
           >
-             {loading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Kayıt Ol'}
+            {loading ? 'Kayıt Olunuyor...' : 'Kayıt Ol'}
           </button>
         </form>
 

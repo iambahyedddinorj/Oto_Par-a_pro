@@ -45,11 +45,11 @@ export interface SearchResult {
 export type UserRole = 'admin' | 'user';
 
 export interface User {
-  id: string; // Firebase UID
+  id: string;
   name: string;
   username: string;
   email: string;
-  // password removed, handled by Firebase Auth
+  // Password frontend'de tutulmaz, Firebase Auth yönetir
   role: UserRole;
   isApproved: boolean;
   allowedBrands?: string[];
